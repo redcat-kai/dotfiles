@@ -4,10 +4,10 @@ call plug#begin('~/.vim/plugged')
     " Coding
     Plug 'neoclide/coc.nvim', {'branch': 'release'}  " Code Completions
     Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
-    Plug 'nvim-treesitter/playground'
+    " Plug 'nvim-treesitter/playground'
     Plug 'rebelot/kanagawa.nvim'
     Plug 'nvim-lua/plenary.nvim'
-    Plug 'nvim-telescope/telescope.nvim', { 'tag': '0.1.8' }
+    Plug 'nvim-telescope/telescope.nvim'
     Plug 'stevearc/oil.nvim'
     Plug 'github/copilot.vim'
    
@@ -24,8 +24,10 @@ call plug#begin('~/.vim/plugged')
     " Plug 'tpope/vim-commentary'
 
     " Debugging
+    Plug 'nvim-neotest/nvim-nio'
     Plug 'mfussenegger/nvim-dap'
     Plug 'rcarriga/nvim-dap-ui'
+    Plug 'elixir-lsp/coc-elixir', {'do': 'yarn install && yarn prepack'}
 
 " Initialize plugin system
 call plug#end()
@@ -53,6 +55,11 @@ inoremap <C-U> <Esc>d0xi
 inoremap <A-d> <Esc>dwi
 inoremap <A-Backspace> <Esc>dbxa
 
+" Copilot 
+imap <silent><script><expr> <C-J> copilot#Accept("\<CR>")
+let g:copilot_no_tab_map = v:true
+
+
 " Paste from clipboard
 noremap <C-p> "+p
 " Copy to clipboard
@@ -68,18 +75,17 @@ nmap <leader>bd :bd<CR>
 nmap <leader>bD :bd!<CR>
 
 " Floaterm keybindings
-" Open lf in floating terminal 
-nmap <leader>f :FloatermNew --opener=edit lf<CR>
+nmap <leader>f :Oil .<CR>
+nnoremap <leader>F :execute 'Oil ' . expand('%:p:h')<CR>
 
 " Fuzzy find current buffer's DIR
-"nmap <leader>p :cd %:p:h <BAR> FloatermNew --opener=edit fzf<CR>
 nnoremap <leader>p <cmd>Telescope find_files<CR>
 nnoremap <leader>g <cmd>Telescope live_grep<CR>
 nnoremap <leader>b <cmd>Telescope buffers<CR>
 
 
 " Lazygit in buffer DIR 
-nmap <leader>v :cd %:p:h <BAR> FloatermNew --opener=edit lazygit<CR>
+nmap <leader>v :FloatermNew --opener=edit lazygit<CR>
 
 " Live grep all files in directory
 "nmap <leader>g :cd %:p:h <BAR> FloatermNew --opener=edit ~/.config/scripts/floaterm_scripts/live_grep.sh<CR>
@@ -87,8 +93,6 @@ nmap <leader>v :cd %:p:h <BAR> FloatermNew --opener=edit lazygit<CR>
 " Fuzzy find any file in /home or /media
 nmap <leader>l :FloatermNew --opener=edit floaterm_wrapper $(fd -H . /home /run/media \| fzf --preview 'bat --style=numbers --color=always --line-range :500 {}')<CR>
 
-" Open floating terminal to mess around, close when done
-nmap <leader>t :cd %:p:h <BAR> FloatermNew --opener=edit<CR>
 
 " Extending 'g'
 " Open file in split
@@ -187,8 +191,8 @@ filetype plugin on
 set cursorline              " Highlight current cursorline
 set ttyfast                 " Speed up scrolling in Vim
 set conceallevel=2          " Hide symbols for bold/italics when writing in markdown
-set textwidth=80
-set colorcolumn=81
+set textwidth=120
+set colorcolumn=121
 set splitright
 
 highlight ColorColumn ctermbg=blue
@@ -309,10 +313,10 @@ nmap <leader>cl  <Plug>(coc-codelens-action)
 
 lua <<EOF
 local dap = require('dap')
-dap.adapters.python = {
-  type = 'executable';
-  command = '/home/kai/.virtualenvs/cv/debugpy/bin/python';
-  args = { '-m', 'debugpy.adapter' };
+dap.adapters.debugpy = {
+  type = 'executable',
+  command = '/Users/gibsonk/.virtualenvs/debugpy/bin/python',
+  args = { '-m', 'debugpy.adapter' },
 }
 
 local dap = require('dap')
@@ -326,7 +330,7 @@ local dap = require('dap')
 dap.configurations.python = {
   {
     -- The first three options are required by nvim-dap
-    type = 'python'; -- the type here established the link to the adapter definition: `dap.adapters.python`
+    type = 'debugpy'; -- the type here established the link to the adapter definition: `dap.adapters.python`
     request = 'launch';
     name = "Launch file";
 
@@ -381,36 +385,22 @@ dap.configurations.cpp = {
 dap.configurations.c = dap.configurations.cpp
 dap.configurations.rust = dap.configurations.cpp
 
-require'nvim-treesitter.configs'.setup {
-  -- A list of parser names, or "all"
-  ensure_installed = { "c", "lua", "rust", "python", "markdown", "nix"},
+require'nvim-treesitter'.setup { -- Directory to install parsers and queries to (prepended to runtimepath to have priority) 
+  install_dir = vim.fn.stdpath('data') .. '/site', 
+  highlight = { 
+    enable = true -- false will disable the whole extension 
+  }, 
+} 
 
-  -- Install parsers synchronously (only applied to `ensure_installed`)
-  sync_install = false,
+require'nvim-treesitter'.install { 'rust', 'javascript', 'zig', 'elixir', 'c', 'cpp', 'lua', 'python', 'fsharp' }
 
-  -- Automatically install missing parsers when entering buffer
-  auto_install = true,
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = {"elixir", "rust", "zig", "c", "cpp", "lua", "python", "vim", "markdown", "fsharp"},
+  callback = function() vim.treesitter.start() end,
+})
 
-  -- List of parsers to ignore installing (for "all")
-  ignore_install = { "javascript" },
 
-  highlight = {
-    -- `false` will disable the whole extension
-    enable = true,
 
-    -- NOTE: these are the names of the parsers and not the filetype. (for example if you want to
-    -- disable highlighting for the `tex` filetype, you need to include `latex` in this list as this is
-    -- the name of the parser)
-    -- list of language that will be disabled
-
-    disable = { "markdown" },
-    -- Setting this to true will run `:h syntax` and tree-sitter at the same time.
-    -- Set this to `true` if you depend on 'syntax' being enabled (like for indentation).
-    -- Using this option may slow down your editor, and you may see some duplicate highlights.
-    -- Instead of true it can also be a list of languages
-    additional_vim_regex_highlighting = false,
-  },
-}
 
 vim.filetype.add({
   extension = {
@@ -420,14 +410,6 @@ vim.filetype.add({
   },
 })
 
-local parser_config = require "nvim-treesitter.parsers".get_parser_configs()
-parser_config.c3 = {
-  install_info = {
-    url = "https://github.com/c3lang/tree-sitter-c3",
-    files = {"src/parser.c", "src/scanner.c"},
-    branch = "main",
-  },
-}
 require("oil").setup()
 
 EOF
